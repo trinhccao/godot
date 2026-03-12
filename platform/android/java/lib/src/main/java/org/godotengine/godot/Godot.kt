@@ -601,6 +601,7 @@ class Godot private constructor(val context: Context) {
 			ViewCompat.setWindowInsetsAnimationCallback(topView, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
 				var startBottom = 0
 				var endBottom = 0
+
 				override fun onPrepare(animation: WindowInsetsAnimationCompat) {
 					startBottom = ViewCompat.getRootWindowInsets(topView)?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
 				}
@@ -630,7 +631,7 @@ class Godot private constructor(val context: Context) {
 					if (imeAnimation != null) {
 						val interpolatedFraction = imeAnimation.interpolatedFraction
 						// Linear interpolation between start and end values.
-						val keyboardHeight = startBottom * (1.0f - interpolatedFraction) + endBottom * interpolatedFraction
+						val keyboardHeight = startBottom + (endBottom - startBottom) * interpolatedFraction
 						val finalHeight = maxOf(keyboardHeight.toInt() - topView.rootView.paddingBottom, 0)
 						GodotLib.setVirtualKeyboardHeight(finalHeight)
 					}
@@ -646,6 +647,13 @@ class Godot private constructor(val context: Context) {
 					}
 				}
 			})
+
+			topView.viewTreeObserver.addOnGlobalLayoutListener {
+				val insets = ViewCompat.getRootWindowInsets(topView)?.getInsets(WindowInsetsCompat.Type.ime())
+				val bottom = insets?.bottom ?: 0
+				val insetBottom = maxOf(bottom - topView.rootView.paddingBottom, 0)
+				GodotLib.setVirtualKeyboardHeight(insetBottom)
+			}
 
 			renderView?.queueOnRenderThread {
 				for (plugin in pluginRegistry.allPlugins) {
@@ -790,8 +798,10 @@ class Godot private constructor(val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainActivityResult(requestCode, resultCode, data)
 		}
-		runOnRenderThread {
-			FilePicker.handleActivityResult(context, requestCode, resultCode, data)
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+			runOnRenderThread {
+				FilePicker.handleActivityResult(context, requestCode, resultCode, data)
+			}
 		}
 	}
 
@@ -1039,7 +1049,9 @@ class Godot private constructor(val context: Context) {
 
 	@Keep
 	private fun showFilePicker(currentDirectory: String, filename: String, fileMode: Int, filters: Array<String>) {
-		FilePicker.showFilePicker(context, getActivity(), currentDirectory, filename, fileMode, filters)
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+			FilePicker.showFilePicker(context, getActivity(), currentDirectory, filename, fileMode, filters)
+		}
 	}
 
 	/**
